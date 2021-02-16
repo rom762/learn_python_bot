@@ -13,6 +13,11 @@ TOKEN = credentials.TOKEN
 CATS_DICT = ['кота', 'котика', 'котейку', 'кошака']
 
 
+def get_smile(txt = ':kissing_heart:'):
+    smile = emojize(txt, use_aliases=True)
+    return smile
+
+
 def get_random_smile():
     smile = choice(credentials.USER_EMOJI)
     smile = emojize(smile, use_aliases=True)
@@ -26,6 +31,7 @@ def greet_user(update, context):
     smile = credentials.USER_EMOJI[0]
     smile = emojize(smile, use_aliases=True)
     update.message.reply_text(f'Привет, попроси меня показать тебе {choice(CATS_DICT)}! {smile}')
+
 
 def play_random_number(user_number):
     bot_number = randint(user_number - 10, user_number + 10)
@@ -63,9 +69,17 @@ def echo_text(update, context):
     for cat in CATS_DICT:
         if cat in message:
             send_cat(update, context)
-            break
-    else:
-        update.message.reply_text(message)
+            return
+
+    for compliment in credentials.COMPLIMENTS:
+        if compliment in message.lower():
+            update.message.reply_text(f'Мяy-мяy {get_smile()}')
+            return
+
+    for insult in credentials.INSULTS:
+        if insult in message.lower():
+            update.message.reply_text(f'Фррр {get_smile(":smirk_cat:")}')
+            return
 
 
 def send_cat(update, context):
@@ -83,7 +97,6 @@ def main():
     dp.add_handler(CommandHandler('guess', guess_number))
     dp.add_handler(CommandHandler('cat', send_cat))
     dp.add_handler(MessageHandler(Filters.text, echo_text))
-
 
     logging.info('бот стартовал')
     my_bot.start_polling()
