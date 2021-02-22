@@ -17,15 +17,16 @@ def is_it_intersect(s1, s2):
     return len(s3) > 0
 
 
-def get_smile(txt = ':kissing_heart:'):
-    smile = emojize(txt, use_aliases=True)
-    return smile
+def get_smile(txt=':kissing_heart:', random_smile=False):
+    if random_smile:
+        return emojize(choice(credentials.USER_EMOJI), use_aliases=True)
+    return emojize(txt, use_aliases=True)
 
 
-def get_random_smile():
-    smile = choice(credentials.USER_EMOJI)
-    smile = emojize(smile, use_aliases=True)
-    return smile
+# def get_random_smile():
+#     smile = choice(credentials.USER_EMOJI)
+#     smile = emojize(smile, use_aliases=True)
+#     return smile
 
 
 def normalized(message):
@@ -178,3 +179,14 @@ def main_keyboard():
         ['Курс доллара', 'Что с погодой'],
         [KeyboardButton('Мои координаты', request_location=True), KeyboardButton('Мои контакты', request_contact=True)]
     ])
+
+
+def play_random_number(user_number):
+    bot_number = randint(user_number - 10, user_number + 10)
+    if bot_number > user_number:
+        message = f'Вы ввели {user_number}, у бота {bot_number}. Вы проиграли!'
+    elif bot_number == user_number:
+        message = f'Вы ввели {user_number}, у бота {bot_number}. Ничья!'
+    else:
+        message = f'Вы ввели {user_number}, у бота {bot_number}. Вы победили!'
+    return message
