@@ -1,3 +1,5 @@
+import random
+
 import credentials
 from emoji import emojize
 import glob
@@ -7,9 +9,52 @@ from pprint import pprint
 import re
 from random import choice, randint
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+import requests
+from lxml import etree
 
 logging.basicConfig(filename='bot.log', level=logging.INFO)
 TOKEN = credentials.TOKEN
+
+
+def get_exchange(valute='Доллар США'):
+    url = credentials.EXCHANGE_URL
+    response = requests.get(url)
+    root = etree.fromstring(response.content)
+    for elem in root.getchildren():
+        if elem[3].text == valute:
+            current_course = float(elem[4].text.replace(',', '.'))
+            break
+    return current_course
+
+
+def get_weather(city_name='Moscow,Russia'):
+    url = credentials.WEATER_URL
+    params = {
+        'key': credentials.WEATHER_API_KEY,
+        'q': city_name,
+        'format': 'json',
+        'num_of_days': 1,
+        'lang': 'ru',
+    }
+
+    response = requests.get(url, params)
+    # print(f'wheather status code {response.status_code}')
+    weather = response.json()
+    pprint(weather)
+    if 'data' in weather:
+        if 'current_condition' in weather['data']:
+            try:
+                current_weather = weather['data']['current_condition'][0]
+                weather_list = [
+                    f'Температура: {current_weather["temp_C"]}, ощущается как {current_weather["FeelsLikeC"]}',
+                    f'Влажность {current_weather["humidity"]}, {current_weather["lang_ru"][0]["value"]}',
+                    f'Cкорость ветра {current_weather["windspeedKmph"]} км/ч']
+                return '\n'.join(weather_list)
+            except (IndexError, TypeError):
+                print('Weather mistake!')
+                return 'При определении погоды возникли ошибки'
+    else:
+        return 'Сервис погоды временно недоступен'
 
 
 def get_smile(txt = ':kissing_heart:'):
@@ -73,53 +118,70 @@ def normalized(message):
     print(f'на выходе получили {message_normalized}')
     return message_normalized
 
+
 def is_it_intersect(s1, s2):
     s3 = list(set(s1).intersection(set(s2)))
     print(f'is_it_intersect {s3, len(s3)}')
-    return len(s3)
+    return len(s3) > 0
 
 
 def find_the_meaning(message):
 
     norm_message = normalized(message)
+    meaning = ''
 
     if is_it_intersect(credentials.NAMES, norm_message):
-        return 'имена'
+        meaning = 'names'
 
-    if ('не' in norm_message) and ('показывать' in norm_message) and \
-            (('кот' in norm_message) or ('кошка' in norm_message)):
-        return 'котейка плачет'
+    elif is_it_intersect(['погода', 'погодка'], norm_message):
+        meaning = 'weather'
 
-    elif ('показать' in norm_message) and (('кот' in norm_message) or ('кошка' in norm_message)):
-        return 'нужно показать кота'
+    elif ('курс' in norm_message) and (is_it_intersect(['доллар', 'бакс'], norm_message)):
+        meaning = 'exchange'
+
+    elif ('не' in norm_message) and ('показывать' in norm_message) and (is_it_intersect(credentials.CATS_DICT, norm_message)):
+        print('meaning is : котейка плачет')
+        meaning = 'sad_cat'
+
+    elif ('показать' in norm_message) and \
+            (('кот' in norm_message) or ('кошка' in norm_message) or ('котик' in norm_message)):
+        meaning = 'cat'
 
     elif len(list(set(credentials.CATS_DICT).intersection(set(norm_message)))):
-        return 'нужно показать кота'
+        meaning = 'cat'
 
     elif len(list(set(credentials.COMPLIMENTS).intersection(set(norm_message)))):
-        return 'тут надо умилиться'
+        meaning = 'smile'
 
     elif len(list(set(credentials.INSULTS).intersection(set(norm_message)))):
-        return 'тут надо фыркнуть и обидеться'
+        meaning = 'arrrgh'
 
     elif ('показать' in norm_message) and ('сушка' in norm_message):
-        return 'показать сушку'
+        meaning = 'sushka'
 
     elif ('показать' in norm_message) and \
             (('собака' in norm_message) or ('сметанка' in norm_message)):
-        return 'показать собаку'
+        meaning = 'dog'
+
     elif 'сметана' in norm_message:
-        return 'показать сметану'
+        meaning = 'dog'
 
     elif ('ромка' in norm_message) and ('настоящий' in norm_message):
-        return 'настоящего ромку'
+        meaning = 'real_rom'
 
     elif 'ромка' in norm_message:
-        return 'показать бородатого'
+        meaning = 'bearded'
+    print(f'meaning {meaning}')
+    return meaning
 
 
-    else:
-        return 'не определен'
+def send_photo(update, context, meaning='cat'):
+    mask = credentials.FILE_MASKS[meaning]
+    photos_list = glob.glob(f'images/{mask}')
+    photo = choice(photos_list)
+    chat_id = update.effective_chat.id
+    context.bot.send_photo(chat_id=chat_id, photo=open(photo, 'rb'))
+    return
 
 
 def echo_text(update, context):
@@ -129,96 +191,98 @@ def echo_text(update, context):
     print(chat_id, message)
 
     meaning = find_the_meaning(message)
-    if meaning == 'имена':
-        context.bot.send_photo(chat_id=chat_id, photo=open(glob.glob('images/names.jpg')[0], 'rb'))
-        return
+    if meaning == 'smile':
+        update.message.reply_text(f'{random.choice(["Mяу-Мяу", "Мурррр"])} {get_smile()}')
 
-    if meaning == 'показать бородатого':
-        bearded = glob.glob('images/rom.jpg')[0]
-        context.bot.send_photo(chat_id=chat_id, photo=open(bearded, 'rb'))
-        return
+    elif meaning == 'arrrgh':
+        update.message.reply_text(f'{random.choice(["Фррр", "Кусь тебя!", "Цап-царап!"])} {get_smile(":smirk_cat:")}')
 
-    if meaning == 'настоящего ромку':
-        real_rom = glob.glob('images/real_rom.jpg')[0]
-        print(real_rom)
-        context.bot.send_photo(chat_id=chat_id, photo=open(real_rom, 'rb'))
-        return
+    elif meaning == 'weather':
+        update.message.reply_text(get_weather())
 
-    if meaning == 'тут надо умилиться':
-        update.message.reply_text(f'Мяy-мяy {get_smile()}')
-        return
+    elif meaning == 'exchange':
+        update.message.reply_text(get_exchange())
 
-    if meaning == 'тут надо фыркнуть и обидеться':
-        update.message.reply_text(f'Фррр {get_smile(":smirk_cat:")}')
-        return
-
-    if meaning == 'нужно показать кота':
-        send_cat(update, context)
-        return
-
-    if meaning == 'показать сушку':
-        send_sushka(update, context)
-        return
-
-    if meaning == 'показать собаку':
-        send_dog(update, context)
-        return
-
-    if meaning == 'показать сметану':
-        send_cream(update, context)
-        return
-    # for cat in CATS_DICT:
-    #     if cat in message:
-    #         send_cat(update, context)
-    #         return
-
-    # for compliment in credentials.COMPLIMENTS:
-    #     if compliment in message.lower():
-    #         update.message.reply_text(f'Мяy-мяy {get_smile()}')
-    #         return
-
-    # for insult in credentials.INSULTS:
-    #     if insult in message.lower():
-    #         update.message.reply_text(f'Фррр {get_smile(":smirk_cat:")}')
-    #         return
-
-
-def send_cream(update, context):
-    print('cream send activate')
-    cream_photos_list = glob.glob('images/*cream*')
-    cream_photo = choice(cream_photos_list)
-    chat_id = update.effective_chat.id
-    context.bot.send_photo(chat_id=chat_id, photo=open(cream_photo, 'rb'))
-
-def send_cat(update, context):
-    print('cats')
-    cat_photos_list = glob.glob('images/*cat*')
-    cat_pic_filename = choice(cat_photos_list)
-    chat_id = update.effective_chat.id
-    context.bot.send_photo(chat_id=chat_id, photo=open(cat_pic_filename, 'rb'))
+    else:
+        send_photo(update, context, meaning=meaning)
+    # if meaning == 'имена':
+    #     send_photo(update, context, meaning='names', is_it_random=False)
+    #     return
+    #
+    # if meaning == 'показать бородатого':
+    #     send_photo(update, context, meaning='bearded', is_it_random=False)
+    #     return
+    #
+    # if meaning == 'настоящего ромку':
+    #     send_photo(update, context, meaning='real_rom', is_it_random=False)
+    #     return
+    #
+    # if meaning == 'тут надо умилиться':
+    #     update.message.reply_text(f'Мяy-мяy {get_smile()}')
+    #     return
+    #
+    # if meaning == 'тут надо фыркнуть и обидеться':
+    #     update.message.reply_text(f'Фррр {get_smile(":smirk_cat:")}')
+    #     return
+    #
+    # if meaning == 'нужно показать кота':
+    #     send_photo(update,context, meaning='cat')
+    #     return
+    #
+    # if meaning == 'показать сушку':
+    #     send_photo(update, context, meaning='sushka')
+    #     return
+    #
+    # if meaning == 'показать собаку':
+    #     send_photo(update, context, meaning='dog')
+    #     return
+    #
+    # if meaning == 'показать сметану':
+    #     send_cream(update, context)
+    #     return
+    #
+    # if meaning == 'котейка плачет':
+    #     send_photo(update, context, meaning='sad_cat')
+    #     return
 
 
-def send_sushka(update, context):
-    print('sushka activated')
-    sushka_filename = glob.glob('images/sushka.jpeg')[0]
-    chat_id = update.effective_chat.id
-    context.bot.send_photo(chat_id=chat_id, photo=open(sushka_filename, 'rb'))
+# def send_cream(update, context):
+#     print('cream send activate')
+#     cream_photos_list = glob.glob('images/*cream*')
+#     cream_photo = choice(cream_photos_list)
+#     chat_id = update.effective_chat.id
+#     context.bot.send_photo(chat_id=chat_id, photo=open(cream_photo, 'rb'))
 
 
-def send_dog(update, context):
-    print('smetanka activated')
-    dogs_list = glob.glob('images/*dog*.jp*g')
-    dog_filename = choice(dogs_list)
-    chat_id = update.effective_chat.id
-    context.bot.send_photo(chat_id=chat_id, photo=open(dog_filename, 'rb'))
-
+# def send_cat(update, context):
+#     print('cats')
+#     cat_photos_list = glob.glob('images/*cat*')
+#     cat_pic_filename = choice(cat_photos_list)
+#     chat_id = update.effective_chat.id
+#     context.bot.send_photo(chat_id=chat_id, photo=open(cat_pic_filename, 'rb'))
+#
+#
+# def send_sushka(update, context):
+#     print('sushka activated')
+#     sushka_filename = glob.glob('images/sushka.jpeg')[0]
+#     chat_id = update.effective_chat.id
+#     context.bot.send_photo(chat_id=chat_id, photo=open(sushka_filename, 'rb'))
+#
+#
+# def send_dog(update, context):
+#     print('smetanka activated')
+#     dogs_list = glob.glob('images/*dog*.jp*g')
+#     dog_filename = choice(dogs_list)
+#     chat_id = update.effective_chat.id
+#     context.bot.send_photo(chat_id=chat_id, photo=open(dog_filename, 'rb'))
+#
 
 def main():
     my_bot = Updater(token=TOKEN, use_context=True)
     dp = my_bot.dispatcher
     dp.add_handler(CommandHandler('start', greet_user))
     dp.add_handler(CommandHandler('guess', guess_number))
-    dp.add_handler(CommandHandler('cat', send_cat))
+    dp.add_handler(CommandHandler('cat', send_photo))
     dp.add_handler(MessageHandler(Filters.text, echo_text))
 
     logging.info('бот стартовал')
@@ -228,6 +292,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
