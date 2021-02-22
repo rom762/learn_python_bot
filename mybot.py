@@ -9,6 +9,7 @@ from pprint import pprint
 import re
 from random import choice, randint
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+from telegram import ReplyKeyboardMarkup
 import requests
 from lxml import etree
 
@@ -74,7 +75,7 @@ def greet_user(update, context):
     print('вызван start')
     smile = credentials.USER_EMOJI[0]
     smile = emojize(smile, use_aliases=True)
-    update.message.reply_text(f'Привет, попроси меня показать тебе {choice(credentials.CATS_DICT)}! {smile}')
+    update.message.reply_text(f'Привет, попроси меня показать тебе котика {smile}', reply_markup=main_keyboard())
 
 
 def play_random_number(user_number):
@@ -150,7 +151,8 @@ def find_the_meaning(message):
     elif len(list(set(credentials.CATS_DICT).intersection(set(norm_message)))):
         meaning = 'cat'
 
-    elif len(list(set(credentials.COMPLIMENTS).intersection(set(norm_message)))):
+    # elif len(list(set(credentials.COMPLIMENTS).intersection(set(norm_message)))):
+    elif is_it_intersect(credentials.COMPLIMENTS, norm_message):
         meaning = 'smile'
 
     elif len(list(set(credentials.INSULTS).intersection(set(norm_message)))):
@@ -164,7 +166,7 @@ def find_the_meaning(message):
         meaning = 'dog'
 
     elif 'сметана' in norm_message:
-        meaning = 'dog'
+        meaning = 'cream'
 
     elif ('ромка' in norm_message) and ('настоящий' in norm_message):
         meaning = 'real_rom'
@@ -175,22 +177,43 @@ def find_the_meaning(message):
     return meaning
 
 
+def get_user_counter(update, context):
+    user_data = context.user_data
+    if 'counter' not in user_data:
+        user_data['counter'] = 1
+    elif user_data['counter'] > 3:
+        user_data['counter'] = -3
+    else:
+        user_data['counter'] += 1
+
+    # print(f'User counter {user_data["counter"]}')
+    print(user_data)
+    return user_data['counter']
+
+
 def send_photo(update, context, meaning='cat'):
-    mask = credentials.FILE_MASKS[meaning]
-    photos_list = glob.glob(f'images/{mask}')
-    photo = choice(photos_list)
-    chat_id = update.effective_chat.id
-    context.bot.send_photo(chat_id=chat_id, photo=open(photo, 'rb'))
-    return
+    counter = get_user_counter(update, context)
+    if counter < 0:
+        message = f'Вы слишком часто просите показать котиков {counter}\nПохоже у вас котозависимость.'
+        send_text(update, context, message)
+    else:
+        mask = credentials.FILE_MASKS[meaning]
+        photos_list = glob.glob(f'images/{mask}')
+        photo = choice(photos_list)
+        chat_id = update.effective_chat.id
+        context.bot.send_photo(chat_id=chat_id, photo=open(photo, 'rb'), reply_markup=main_keyboard())
+
+
+def send_text(update, context, message):
+    update.message.reply_text(message)
 
 
 def echo_text(update, context):
-
     message = update.message.text
     chat_id = update.effective_chat.id
     print(chat_id, message)
-
     meaning = find_the_meaning(message)
+
     if meaning == 'smile':
         update.message.reply_text(f'{random.choice(["Mяу-Мяу", "Мурррр"])} {get_smile()}')
 
@@ -205,77 +228,14 @@ def echo_text(update, context):
 
     else:
         send_photo(update, context, meaning=meaning)
-    # if meaning == 'имена':
-    #     send_photo(update, context, meaning='names', is_it_random=False)
-    #     return
-    #
-    # if meaning == 'показать бородатого':
-    #     send_photo(update, context, meaning='bearded', is_it_random=False)
-    #     return
-    #
-    # if meaning == 'настоящего ромку':
-    #     send_photo(update, context, meaning='real_rom', is_it_random=False)
-    #     return
-    #
-    # if meaning == 'тут надо умилиться':
-    #     update.message.reply_text(f'Мяy-мяy {get_smile()}')
-    #     return
-    #
-    # if meaning == 'тут надо фыркнуть и обидеться':
-    #     update.message.reply_text(f'Фррр {get_smile(":smirk_cat:")}')
-    #     return
-    #
-    # if meaning == 'нужно показать кота':
-    #     send_photo(update,context, meaning='cat')
-    #     return
-    #
-    # if meaning == 'показать сушку':
-    #     send_photo(update, context, meaning='sushka')
-    #     return
-    #
-    # if meaning == 'показать собаку':
-    #     send_photo(update, context, meaning='dog')
-    #     return
-    #
-    # if meaning == 'показать сметану':
-    #     send_cream(update, context)
-    #     return
-    #
-    # if meaning == 'котейка плачет':
-    #     send_photo(update, context, meaning='sad_cat')
-    #     return
 
 
-# def send_cream(update, context):
-#     print('cream send activate')
-#     cream_photos_list = glob.glob('images/*cream*')
-#     cream_photo = choice(cream_photos_list)
-#     chat_id = update.effective_chat.id
-#     context.bot.send_photo(chat_id=chat_id, photo=open(cream_photo, 'rb'))
+def main_keyboard():
+    return ReplyKeyboardMarkup([
+        ['Покажи котика', 'Покажи сметанку'],
+        ['Курс доллара', 'Что с погодой'],
+    ])
 
-
-# def send_cat(update, context):
-#     print('cats')
-#     cat_photos_list = glob.glob('images/*cat*')
-#     cat_pic_filename = choice(cat_photos_list)
-#     chat_id = update.effective_chat.id
-#     context.bot.send_photo(chat_id=chat_id, photo=open(cat_pic_filename, 'rb'))
-#
-#
-# def send_sushka(update, context):
-#     print('sushka activated')
-#     sushka_filename = glob.glob('images/sushka.jpeg')[0]
-#     chat_id = update.effective_chat.id
-#     context.bot.send_photo(chat_id=chat_id, photo=open(sushka_filename, 'rb'))
-#
-#
-# def send_dog(update, context):
-#     print('smetanka activated')
-#     dogs_list = glob.glob('images/*dog*.jp*g')
-#     dog_filename = choice(dogs_list)
-#     chat_id = update.effective_chat.id
-#     context.bot.send_photo(chat_id=chat_id, photo=open(dog_filename, 'rb'))
-#
 
 def main():
     my_bot = Updater(token=TOKEN, use_context=True)
