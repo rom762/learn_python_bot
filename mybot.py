@@ -1,4 +1,5 @@
 import random
+import time
 
 import credentials
 from emoji import emojize
@@ -148,10 +149,9 @@ def find_the_meaning(message):
             (('кот' in norm_message) or ('кошка' in norm_message) or ('котик' in norm_message)):
         meaning = 'cat'
 
-    elif len(list(set(credentials.CATS_DICT).intersection(set(norm_message)))):
+    elif is_it_intersect(credentials.CATS_DICT, norm_message):
         meaning = 'cat'
 
-    # elif len(list(set(credentials.COMPLIMENTS).intersection(set(norm_message)))):
     elif is_it_intersect(credentials.COMPLIMENTS, norm_message):
         meaning = 'smile'
 
@@ -173,6 +173,10 @@ def find_the_meaning(message):
 
     elif 'ромка' in norm_message:
         meaning = 'bearded'
+
+    elif 'шахматы' in norm_message:
+        meaning = 'chess'
+
     print(f'meaning {meaning}')
     return meaning
 
@@ -181,11 +185,14 @@ def get_user_counter(update, context):
     user_data = context.user_data
     if 'counter' not in user_data:
         user_data['counter'] = 1
+
     elif user_data['counter'] > 3:
         user_data['counter'] = -3
+
     else:
         user_data['counter'] += 1
 
+    user_data['time'] = time.time()
     # print(f'User counter {user_data["counter"]}')
     print(user_data)
     return user_data['counter']
